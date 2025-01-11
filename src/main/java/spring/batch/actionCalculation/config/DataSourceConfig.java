@@ -43,8 +43,8 @@ public class DataSourceConfig {
         return new CommonDataSourceProperties();
     }
 
-    @Bean("postgresqlDataSource")
-    public DataSource postgresqlDataSource(
+    @Bean("postgresDataSource")
+    public DataSource postgresDataSource(
             @Qualifier("commonHikariConfig") HikariConfig hikariConfig,
             @Qualifier("postgresDataSourceProperties") CommonDataSourceProperties properties
     ){
@@ -61,7 +61,7 @@ public class DataSourceConfig {
 
     @Bean("postgresTransactionManager")
     public PlatformTransactionManager postgresTransactionManager(
-            @Qualifier("postgresqlDataSource") DataSource dataSource
+            @Qualifier("postgresDataSource") DataSource dataSource
     ){
         JdbcTransactionManager jdbcTransactionManager = new JdbcTransactionManager();
         jdbcTransactionManager.setDataSource(dataSource);

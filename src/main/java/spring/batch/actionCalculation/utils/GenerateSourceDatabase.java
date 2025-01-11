@@ -24,9 +24,9 @@ public class GenerateSourceDatabase {
     public static void main(String[] args) {
         try(var context = new AnnotationConfigApplicationContext(DataSourceConfig.class)){
 //            AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(DataSourceConfig.class);
-            var jdbcTemplate = new JdbcTemplate(context.getBean("postgresqlDataSource", DataSource.class));
-            var postgresTransactionManager = context.getBean("postgresTransactionManager", PlatformTransactionManager.class);
-            SourceDatabaseUtils.createNewTable(jdbcTemplate, postgresTransactionManager, CommonConstants.SESSION_ACTION_TABLE_NAME);
+            var jdbcTemplate = new JdbcTemplate(context.getBean("postgresDataSource", DataSource.class));
+            var postgresTransactionManager = context.getBean("`postgresTransactionManager`", PlatformTransactionManager.class);
+            SourceDatabaseUtils.createNewSessionActionTable(jdbcTemplate, postgresTransactionManager);
             new TransactionTemplate(postgresTransactionManager).execute(status -> {
                 IntStream.range(0, CommonConstants.RECORD_COUNT).forEach(i -> {
                     SourceDatabaseUtils.insertSessionAction(jdbcTemplate, generateRecord(i + 1), CommonConstants.SESSION_ACTION_TABLE_NAME);
