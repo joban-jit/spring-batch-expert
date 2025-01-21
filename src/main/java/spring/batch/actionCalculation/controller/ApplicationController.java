@@ -37,7 +37,7 @@ public class ApplicationController {
     private JobLauncher jobLauncher;
 
     @Autowired
-    private AbstractJob simpleActionCalculationJob;
+    private Job simpleActionCalculationJob;
 
     @Autowired
     private Job multiThreadedActionCalculationJob;
