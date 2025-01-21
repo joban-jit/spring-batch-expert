@@ -1,5 +1,6 @@
 package spring.batch.actionCalculation.controller;
 
+import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.JobParametersInvalidException;
@@ -36,7 +37,10 @@ public class ApplicationController {
     private JobLauncher jobLauncher;
 
     @Autowired
-    private AbstractJob simpleActionCalculationJob;
+    private Job simpleActionCalculationJob;
+
+    @Autowired
+    private Job multiThreadedActionCalculationJob;
 
     @PostMapping("/start-simple-local")
     public String startSimpleLocal() throws JobInstanceAlreadyCompleteException, JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException {
@@ -44,6 +48,13 @@ public class ApplicationController {
         jobLauncher.run(simpleActionCalculationJob,buildUniqueJobParameters());
         return "Successfully started!\n";
 
+    }
+
+    @PostMapping("/start-multi-threaded")
+    public String startMultiThreaded() throws Exception{
+        prepareEmptyResultTable();
+        jobLauncher.run(multiThreadedActionCalculationJob, buildUniqueJobParameters());
+        return "Successfully started!\n";
     }
 
     private void prepareEmptyResultTable(){
