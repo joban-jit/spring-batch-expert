@@ -8,8 +8,8 @@ public class CommonConstants {
     public static final String PARTITION_INDEX = "partitionIndex";
     public static final String PARTITION_NAME_PREFIX = "sessionActionPartition-";
     public static final String SESSION_ACTION_TABLE_NAME = "session_action";
-    public static final int USER_COUNT = 100;
-    public static final int RECORD_COUNT = 1000;
+    public static final int USER_COUNT = 5;
+    public static final int RECORD_COUNT = 20;
 
 
 }
