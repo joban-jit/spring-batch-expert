@@ -1,27 +1,23 @@
 package spring.batch.actionCalculation.config;
 
-import org.apache.catalina.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.StepExecutionListener;
-import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
-import org.springframework.batch.core.job.AbstractJob;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.batch.core.launch.support.TaskExecutorJobLauncher;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
-import org.springframework.batch.item.ItemProcessor;
-import org.springframework.batch.item.ItemReader;
-import org.springframework.batch.item.ItemStreamReader;
-import org.springframework.batch.item.ItemWriter;
-import org.springframework.batch.item.database.JdbcPagingItemReader;
+import org.springframework.batch.item.*;
+import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.database.builder.JdbcPagingItemReaderBuilder;
+import org.springframework.batch.item.support.SynchronizedItemStreamWriter;
 import org.springframework.batch.item.support.builder.SynchronizedItemStreamReaderBuilder;
+import org.springframework.batch.item.support.builder.SynchronizedItemStreamWriterBuilder;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.task.ThreadPoolTaskExecutorBuilder;
 import org.springframework.context.annotation.Bean;
@@ -29,8 +25,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
+import spring.batch.actionCalculation.adaptor.JdbcBatchItemStreamWriterAdapter;
 import spring.batch.actionCalculation.constants.CommonConstants;
 import spring.batch.actionCalculation.model.SessionAction;
 import spring.batch.actionCalculation.model.UserScoreUpdate;
@@ -80,7 +76,7 @@ public class ActionCalculationConfig {
             JobRepository jobRepository,
             @Qualifier("postgresTransactionManager") PlatformTransactionManager transactionManager,
             @Qualifier("synchronizedSessionActionReader") ItemStreamReader<SessionAction> synchronizedSessionActionReader,
-            @Qualifier("userScoreUpdateWriter") ItemWriter<UserScoreUpdate> userScoreUpdateWriter,
+            @Qualifier("synchronizedUserScoreUpdateWriter") SynchronizedItemStreamWriter<UserScoreUpdate> synchronizedUserScoreUpdateWriter,
             @Qualifier("multiThreadStepExecutor") TaskExecutor multiThreadStepExecutor,
             @Qualifier("beforeStepLoggerListener") StepExecutionListener beforeStepLoggerListener
 
@@ -92,12 +88,10 @@ public class ActionCalculationConfig {
                 .reader(synchronizedSessionActionReader)
                 // Convert items into user score update objects used to update with (score = score * a + b) idea
                 .processor(getSessionActionProcessor())
-                // Write into the database using the upsert capabilities; ideally, we should also wrap the writer
-                // into synchronized writer to avoid deadlock issues with Postgres. However, we are not doing it,
-                // since this step is provided for demonstration purposes anyway and will produce wrong results
-                // because of strict order guarantee requirements because of the problem definition
-                .writer(userScoreUpdateWriter)
-                .listener(beforeStepLoggerListener())
+                // Write into the database using the upsert capabilities;
+                // Using synchronized writer to avoid deadlock issues with Postgres.
+                .writer(synchronizedUserScoreUpdateWriter)
+                .listener(beforeStepLoggerListener)
                 .taskExecutor(multiThreadStepExecutor)
                 .build();
     }
@@ -126,6 +120,17 @@ public class ActionCalculationConfig {
     ){
         return new SynchronizedItemStreamReaderBuilder<SessionAction>()
                 .delegate(sessionActionReader)
+                .build();
+    }
+
+    @Bean
+    @Qualifier("synchronizedUserScoreUpdateWriter")
+    public SynchronizedItemStreamWriter<UserScoreUpdate> synchronizedUserScoreUpdateWriter(
+            @Qualifier("userScoreUpdateWriter") ItemWriter<UserScoreUpdate> userScoreUpdateWriter
+    ){
+        var jdbcBatchItemStreamWriterAdapter = new JdbcBatchItemStreamWriterAdapter<UserScoreUpdate>((JdbcBatchItemWriter<UserScoreUpdate>) userScoreUpdateWriter);
+        return new SynchronizedItemStreamWriterBuilder<UserScoreUpdate>()
+                .delegate(jdbcBatchItemStreamWriterAdapter)
                 .build();
     }
 
@@ -166,6 +171,7 @@ public class ActionCalculationConfig {
                 .sql(UserScoreUpdate.UPDATE_USER_SCORE_QUERY)
                 .build();
     }
+
 
     @Bean("beforeStepLoggerListener")
     public StepExecutionListener beforeStepLoggerListener(){
