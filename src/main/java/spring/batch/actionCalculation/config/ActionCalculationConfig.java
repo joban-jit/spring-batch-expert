@@ -166,7 +166,7 @@ public class ActionCalculationConfig {
 
 
     @Bean("sessionActionReader")
-    @StepScope
+    @StepScope // reader is stop scoped to auto-wire partition properties from the step execution context
     public ItemStreamReader<SessionAction> sessionActionReader(
             @Qualifier("postgresDataSource")DataSource postgresDataSource,
             @Value("#{stepExecutionContext['partitionCount']}") Integer partitionCount,
