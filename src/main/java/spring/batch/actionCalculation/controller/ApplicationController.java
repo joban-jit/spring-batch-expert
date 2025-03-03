@@ -42,6 +42,9 @@ public class ApplicationController {
     @Autowired
     private Job multiThreadedActionCalculationJob;
 
+    @Autowired
+    private Job partitionedLocalActionCalculationJob;
+
     @PostMapping("/start-simple-local")
     public String startSimpleLocal() throws JobInstanceAlreadyCompleteException, JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException {
         prepareEmptyResultTable();
@@ -54,6 +57,13 @@ public class ApplicationController {
     public String startMultiThreaded() throws Exception{
         prepareEmptyResultTable();
         jobLauncher.run(multiThreadedActionCalculationJob, buildUniqueJobParameters());
+        return "Successfully started!\n";
+    }
+
+    @PostMapping("/start-partitioned-local")
+    public String startPartitionedLocal() throws Exception{
+        prepareEmptyResultTable();
+        jobLauncher.run(partitionedLocalActionCalculationJob, buildUniqueJobParameters());
         return "Successfully started!\n";
     }
 

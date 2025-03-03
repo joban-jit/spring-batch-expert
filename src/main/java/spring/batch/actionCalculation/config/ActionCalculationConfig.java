@@ -6,6 +6,7 @@ import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.StepExecutionListener;
+import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.batch.core.launch.support.TaskExecutorJobLauncher;
@@ -15,10 +16,12 @@ import org.springframework.batch.item.*;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.database.builder.JdbcPagingItemReaderBuilder;
+import org.springframework.batch.item.database.support.PostgresPagingQueryProvider;
 import org.springframework.batch.item.support.SynchronizedItemStreamWriter;
 import org.springframework.batch.item.support.builder.SynchronizedItemStreamReaderBuilder;
 import org.springframework.batch.item.support.builder.SynchronizedItemStreamWriterBuilder;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.task.ThreadPoolTaskExecutorBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,6 +33,7 @@ import spring.batch.actionCalculation.adaptor.JdbcBatchItemStreamWriterAdapter;
 import spring.batch.actionCalculation.constants.CommonConstants;
 import spring.batch.actionCalculation.model.SessionAction;
 import spring.batch.actionCalculation.model.UserScoreUpdate;
+import spring.batch.actionCalculation.partitioner.SessionActionPartitioner;
 
 import javax.sql.DataSource;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -39,6 +43,19 @@ import java.util.concurrent.ThreadPoolExecutor;
 public class ActionCalculationConfig {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ActionCalculationConfig.class);
+
+    /*
+    * Partitioned Local Job
+     */
+    @Bean("partitionedLocalActionCalculationJob")
+    public Job partitionedLocalActionCalculationJob(
+            JobRepository jobRepository,
+            @Qualifier("partitionedLocalActionCalculationStep") Step partitionedLocalActionCalculationStep
+    ){
+        return new JobBuilder("partitionedLocalActionCalculationJob", jobRepository)
+                .start(partitionedLocalActionCalculationStep)
+                .build();
+    }
 
 
     /*
@@ -56,7 +73,6 @@ public class ActionCalculationConfig {
 
 
 
-
     /*
     * Single threaded job
      */
@@ -67,6 +83,20 @@ public class ActionCalculationConfig {
     ){
         return  new JobBuilder("simpleActionCalculationJob", jobRepository)
                 .start(simpleActionCalculationStep)
+                .build();
+    }
+
+
+    @Bean("partitionedLocalActionCalculationStep")
+    public Step partitionedLocalActionCalculationStep(
+            JobRepository jobRepository,
+            @Qualifier("simpleActionCalculationStep") Step simpleActionCalculationStep
+    ){
+        return new StepBuilder("partitionedLocalActionCalculationStep", jobRepository)
+                .partitioner("simpleActionCalculationStep", new SessionActionPartitioner())
+                .taskExecutor(new SimpleAsyncTaskExecutor())
+                .step(simpleActionCalculationStep)
+                .gridSize(3)
                 .build();
     }
 
@@ -136,13 +166,19 @@ public class ActionCalculationConfig {
 
 
     @Bean("sessionActionReader")
+    @StepScope
     public ItemStreamReader<SessionAction> sessionActionReader(
-            @Qualifier("postgresDataSource")DataSource postgresDataSource
+            @Qualifier("postgresDataSource")DataSource postgresDataSource,
+            @Value("#{stepExecutionContext['partitionCount']}") Integer partitionCount,
+            @Value("#{stepExecutionContext['partitionIndex']}") Integer partitionIndex
             ){
+        PostgresPagingQueryProvider postgresPagingQueryProvider = (partitionCount==null || partitionIndex==null)
+                ? SessionAction.selectAllSessionActionsProvider()
+                : SessionAction.selectPartitionOfSessionActionsProvider(partitionCount, partitionIndex);
         return new JdbcPagingItemReaderBuilder<SessionAction>()
                 .name("sessionActionReader")
                 .dataSource(postgresDataSource)
-                .queryProvider(SessionAction.selectAllSessionActionsProvider())
+                .queryProvider(postgresPagingQueryProvider)
                 .rowMapper(SessionAction.getSessionActionMapper())
                 .pageSize(5)
                 .build();
@@ -178,7 +214,15 @@ public class ActionCalculationConfig {
         return new StepExecutionListener(){
             @Override
             public void beforeStep(StepExecution stepExecution){
-                LOGGER.info("Calculation step is about to start handling all session action records");
+                int partitionCount = stepExecution.getExecutionContext().getInt(CommonConstants.PARTITION_COUNT, -1);
+                int partitionIndex = stepExecution.getExecutionContext().getInt(CommonConstants.PARTITION_INDEX, -1);
+                if (partitionCount == -1 && partitionIndex == -1){
+                    LOGGER.info("Calculation step is about to start handling all session action records");
+                }else{
+                    String threadName = Thread.currentThread().getName();
+                    LOGGER.info("Calculation step is about to start handling partition {} out of total {} partitions in the thread -> {}", partitionIndex, partitionCount, threadName);
+                }
+
             }
         };
     }

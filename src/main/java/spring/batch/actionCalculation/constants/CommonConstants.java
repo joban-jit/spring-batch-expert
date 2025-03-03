@@ -10,6 +10,4 @@ public class CommonConstants {
     public static final String SESSION_ACTION_TABLE_NAME = "session_action";
     public static final int USER_COUNT = 5;
     public static final int RECORD_COUNT = 20;
-
-
 }

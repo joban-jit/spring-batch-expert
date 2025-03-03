@@ -22,6 +22,14 @@ public record SessionAction(
         return postgresPagingQueryProvider;
     }
 
+    public static PostgresPagingQueryProvider selectPartitionOfSessionActionsProvider(
+            int partitionCount, int partitionIndex
+    ) {
+        PostgresPagingQueryProvider postgresPagingQueryProvider = selectAllSessionActionsProvider();
+        postgresPagingQueryProvider.setWhereClause("user_id % " + partitionCount + "=" + partitionIndex);
+        return postgresPagingQueryProvider;
+    }
+
     public static RowMapper<SessionAction> getSessionActionMapper(){
         return (rs, rowNum)-> new SessionAction(rs.getLong("id"), rs.getLong("user_id"),
                 rs.getString("action_type"), rs.getDouble("amount"));
